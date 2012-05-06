@@ -1,5 +1,6 @@
 package net.thegreshams.firebase4j.model;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
@@ -25,8 +26,18 @@ public class FirebaseResponse {
 		
 		this.success = success;
 		this.code = code;
+		
+		if( body == null ) {
+			LOGGER.info( "body was null; replacing with empty map" );
+			body = new LinkedHashMap<String, Object>();
+		}
 		this.body = body;
-		this.rawBody = rawBody;
+		
+		if( rawBody == null ) {
+			LOGGER.info( "rawBody was null; replacing with empty string" );
+			rawBody = new String();
+		}
+		this.rawBody = rawBody.trim();
 	}
 	
 	
@@ -72,6 +83,21 @@ public class FirebaseResponse {
 	 */
 	public String getRawBody() {
 		return this.rawBody;
+	}
+	
+	@Override
+	public String toString() {
+		
+		StringBuilder result = new StringBuilder();
+		
+		result.append( FirebaseResponse.class.getSimpleName() + "[ " )
+				.append( "(Success:" ).append( this.success ).append( ") " )
+				.append( "(Code:" ).append( this.code ).append( ") " )
+				.append( "(Body:" ).append( this.body ).append( ") " )
+				.append( "(Raw-body:" ).append( this.rawBody ).append( ") " )
+				.append( "]" );
+		
+		return result.toString();
 	}
 	
 }

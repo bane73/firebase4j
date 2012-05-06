@@ -1,16 +1,17 @@
 package net.thegreshams.firebase4j.service;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
+
+import net.thegreshams.firebase4j.error.FirebaseException;
+import net.thegreshams.firebase4j.error.JacksonUtilityException;
+import net.thegreshams.firebase4j.model.FirebaseResponse;
+import net.thegreshams.firebase4j.util.JacksonUtility;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -19,12 +20,10 @@ import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.JsonParseException;
-import org.codehaus.jackson.map.JsonMappingException;
-import org.codehaus.jackson.map.ObjectMapper;
 
 
 public class Firebase {
@@ -61,538 +60,421 @@ public class Firebase {
 	
 ///////////////////////////////////////////////////////////////////////////////
 //
-// STATIC PUBLIC API
-//
-///////////////////////////////////////////////////////////////////////////////
-
-
-	/**
-	 * Creates a json-string representing the data provided by the map.
-	 * 
-	 * @param dataMap; can be null/empty, but will result in a null result;
-	 * 			otherwise, must be Strings mapped to arbitrary Objects.
-	 * @return the json-string representing the data
-	 * @throws FirebaseException if there was an error converting the map-data into a json-string
-	 */
-	public static String GET_JSON_STRING_FROM_MAP( Map<String, Object> dataMap ) throws FirebaseException {
-	
-		/* NOTE: per Jackson-dox, the map must be of type <String, Object> */
-		
-		if( dataMap == null || dataMap.isEmpty() ) {
-			LOGGER.info( "cannot convert data from map into json when map is null/empty" );
-			return null;
-		}
-		
-		Writer writer = new StringWriter();		
-		try {
-		
-			ObjectMapper mapper = new ObjectMapper();
-			mapper.writeValue( writer, dataMap );
-			
-		} catch( Throwable t ) {
-			
-			String msg = "unable to convert data from map into json: " + dataMap.toString();
-			LOGGER.warn( msg );
-			throw new FirebaseException( msg );
-			
-		}
-		
-		return writer.toString();
-	}
-
-	/**
-	 * Creates a map represented by the json-data provided.
-	 * 
-	 * @param jsonResponse; can be null/empty, but will result in a null result;
-	 * @return Strings mapped to arbitrary Objects
-	 * 
-	 * @throws FirebaseException if there was an error converting the json-string into map-data
-	 */
-	/* 'unchecked' because Jackson-dox state that a JSON-Object will always return as Map<String, Object>
-	 * http://wiki.fasterxml.com/JacksonDataBinding
-	 */	
-	@SuppressWarnings("unchecked")
-	public static Map<String, Object> GET_JSON_STRING_AS_MAP( String jsonResponse ) throws FirebaseException {
-		
-		if( jsonResponse == null || jsonResponse.trim().isEmpty() ) {
-			LOGGER.warn( "jsonResponse was null/empty, returning empty map; was: '" + jsonResponse + "'" );
-			return new HashMap<String, Object>();
-		}
-		jsonResponse = jsonResponse.trim();
-		
-		
-		Map<String, Object> result = null;		
-		try {
-			
-			ObjectMapper mapper = new ObjectMapper();
-			Object o = mapper.readValue( jsonResponse, Object.class );
-			if( o instanceof Map ) {
-				result = (Map<String, Object>) o;
-			}
-			
-		} catch( Throwable t ) {
-			
-			String msg = "unable to map json-response: " + jsonResponse; 
-			LOGGER.error( msg );
-			throw new FirebaseException( msg, t );
-			
-		}
-		
-		return result;
-	}
-
-	
-	
-///////////////////////////////////////////////////////////////////////////////
-//
 // PUBLIC API
 //
 ///////////////////////////////////////////////////////////////////////////////
 	
 
+
 	/**
-	 * GETs data from the root-url.
+	 * GETs data from the base-url.
 	 * 
-	 * @return data
-	 * @throws FirebaseException
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException} 
 	 */
-	public Map<String, Object> get() throws FirebaseException {
+	public FirebaseResponse get() throws FirebaseException {
 		return this.get( null );
 	}
 	
-	/** GETs data from the provided-path relative to the root-url.
+	/**
+	 * GETs data from the provided-path relative to the base-url.
 	 * 
-	 * @param path -- if null/empty, refers to root-url
-	 * @return data
-	 * @throws FirebaseException
+	 * @param path -- if null/empty, refers to the base-url
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException} 
 	 */
-	public Map<String, Object> get( String path ) throws FirebaseException {
+	public FirebaseResponse get( String path ) throws FirebaseException {
 		
-		if( path != null && !path.startsWith( "/" ) ) {
-			path = "/" + path;
-		}
-		if( path == null ) {
-			path = "";
-		}
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpGet request = new HttpGet( url );
+		HttpResponse httpResponse = this.makeRequest( request );
 		
-		String jsonResponse = this.getJsonData( this.baseUrl + path + FIREBASE_API_JSON_EXTENSION );
-		Map<String, Object> result = GET_JSON_STRING_AS_MAP( jsonResponse );
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.GET, httpResponse );
 		
-		return result;
-	}
-	
-	/** 
-	 * PUTs data to the root-url (ie: creates or overwrites).
-	 * If there is already data at the root-url, this data overwrites it.
-	 * If data is null/empty, any data existing at the root-url is deleted.
-	 *  
-	 * @param jsonData -- can be null/empty
-	 * @throws FirebaseException 
-	 */
-	public Map<String, Object> put( String jsonData ) throws FirebaseException {
-		return this.put( null, jsonData );
+		return response;
 	}
 	
 	/**
-	 * PUTs data to the provided-path relative to the root-url (ie: creates or overwrites)
+	 * PUTs data to the base-url (ie: creates or overwrites).
+	 * If there is already data at the base-url, this data overwrites it.
+	 * If data is null/empty, any data existing at the base-url is deleted.
+	 * 
+	 * @param data -- can be null/empty
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link JacksonUtilityException}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse put( Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+		return this.put( null, data );
+	}
+	
+	/**
+	 * PUTs data to the provided-path relative to the base-url (ie: creates or overwrites).
 	 * If there is already data at the path, this data overwrites it.
 	 * If data is null/empty, any data existing at the path is deleted.
 	 * 
-	 * @param path -- if null/empty, refers to root-url
-	 * @param jsonData -- can be null/empty
-	 * @throws FirebaseException 
+	 * @param path -- if null/empty, refers to base-url
+	 * @param data -- can be null/empty
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link JacksonUtilityException}
+	 * @throws {@link FirebaseException}
 	 */
-	public Map<String, Object> put( String path, String jsonData ) throws FirebaseException {
+	public FirebaseResponse put( String path, Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
 		
-		if( path != null && !path.startsWith( "/" ) ) {
-			path = "/" + path;
-		}
-		if( path == null ) {
-			path = "";
-		}
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpPut request = new HttpPut( url );
+		request.setEntity( this.buildEntityFromDataMap( data ) );
+		HttpResponse httpResponse = this.makeRequest( request );
 		
-		String jsonResponse = this.putJsonData( this.baseUrl + path + FIREBASE_API_JSON_EXTENSION, jsonData );
-		Map<String, Object> result = GET_JSON_STRING_AS_MAP( jsonResponse );
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.PUT, httpResponse );
 		
-		return result;
+		return response;
 	}
 	
 	/**
-	 * POSTs data to the provided-path relative to the root-url (ie: modifies)
-	 * Note: the Firebase API calls this 'PUSH'; rather than standard POST-behavior, this method will 
-	 * 			insert the data into the provided-path but will be associated with a Firebase-assigned
-	 * 			id.  
+	 * PUTs data to the provided-path relative to the base-url (ie: creates or overwrites).
+	 * If there is already data at the path, this data overwrites it.
+	 * If data is null/empty, any data existing at the path is deleted.
 	 * 
-	 * @param path
-	 * @throws FirebaseException 
+	 * @param jsonData -- can be null/empty
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
 	 */
-	public Map<String, Object> post( String path, String jsonData ) throws FirebaseException {
+	public FirebaseResponse put( String jsonData ) throws FirebaseException {
+		return this.put( null, jsonData );
+	}
 
-		if( path != null && !path.startsWith( "/" ) ) {
-			path = "/" + path;
-		}
-		if( path == null ) {
-			path = "";
-		}
+	/**
+	 * PUTs data to the provided-path relative to the base-url (ie: creates or overwrites).
+	 * If there is already data at the path, this data overwrites it.
+	 * If data is null/empty, any data existing at the path is deleted.
+	 * 
+	 * @param path -- if null/empty, refers to base-url
+	 * @param jsonData -- can be null/empty
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse put( String path, String jsonData ) throws FirebaseException {
+
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpPut request = new HttpPut( url );
+		request.setEntity( this.buildEntityFromJsonData( jsonData ) );
+		HttpResponse httpResponse = this.makeRequest( request );
 		
-		String jsonResponse = this.postJsonData( this.baseUrl + path + FIREBASE_API_JSON_EXTENSION, jsonData );
-		Map<String, Object> result = GET_JSON_STRING_AS_MAP( jsonResponse );
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.PUT, httpResponse );
 		
-		return result;
+		return response;		
 	}
 	
-	public Map<String, Object> delete( String path ) throws FirebaseException {
-
-		if( path != null && !path.startsWith( "/" ) ) {
-			path = "/" + path;
-		}
-		if( path == null ) {
-			path = "";
-		}
-		
-		String jsonResponse = this.deleteJsonData( this.baseUrl + path + FIREBASE_API_JSON_EXTENSION );
-		Map<String, Object> result = GET_JSON_STRING_AS_MAP( jsonResponse );
-		
-		return result;
+	/**
+	 * POSTs data to the base-url (ie: creates).
+	 * 
+	 * NOTE: the Firebase API does not treat this method in the conventional way, but instead defines it
+	 * as 'PUSH'; the API will insert this data under the base-url but associated with a Firebase-
+	 * generated key; thus, every use of this method will result in a new insert even if the data already 
+	 * exists.
+	 * 
+	 * @param data -- can be null/empty but will result in no data being POSTed
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link JacksonUtilityException}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse post( Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+		return this.post( null, data );
 	}
 	
+	/**
+	 * POSTs data to the provided-path relative to the base-url (ie: creates).
+	 * 
+	 * NOTE: the Firebase API does not treat this method in the conventional way, but instead defines it
+	 * as 'PUSH'; the API will insert this data under the provided path but associated with a Firebase-
+	 * generated key; thus, every use of this method will result in a new insert even if the provided path
+	 * and data already exist.
+	 * 
+	 * @param path -- if null/empty, refers to base-url
+	 * @param data -- can be null/empty but will result in no data being POSTed
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link JacksonUtilityException}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse post( String path, Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+		
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpPost request = new HttpPost( url );
+		request.setEntity( this.buildEntityFromDataMap( data ) );
+		HttpResponse httpResponse = this.makeRequest( request );
+		
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.POST, httpResponse );
+		
+		return response;
+	}
+	
+	/**
+	 * POSTs data to the base-url (ie: creates).
+	 * 
+	 * NOTE: the Firebase API does not treat this method in the conventional way, but instead defines it
+	 * as 'PUSH'; the API will insert this data under the base-url but associated with a Firebase-
+	 * generated key; thus, every use of this method will result in a new insert even if the provided data 
+	 * already exists.
+	 * 
+	 * @param jsonData -- can be null/empty but will result in no data being POSTed
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse post( String jsonData ) throws FirebaseException {
+		return this.post( null, jsonData );
+	}
+	
+	/**
+	 * POSTs data to the provided-path relative to the base-url (ie: creates).
+	 * 
+	 * NOTE: the Firebase API does not treat this method in the conventional way, but instead defines it
+	 * as 'PUSH'; the API will insert this data under the provided path but associated with a Firebase-
+	 * generated key; thus, every use of this method will result in a new insert even if the provided path
+	 * and data already exist.
+	 * 
+	 * @param path -- if null/empty, refers to base-url
+	 * @param jsonData -- can be null/empty but will result in no data being POSTed
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse post( String path, String jsonData ) throws FirebaseException {
+		
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpPost request = new HttpPost( url );
+		request.setEntity( this.buildEntityFromJsonData( jsonData ) );
+		HttpResponse httpResponse = this.makeRequest( request );
+		
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.POST, httpResponse );
+		
+		return response;
+	}
+	
+	/**
+	 * DELETEs data from the base-url.
+	 * 
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse delete() throws FirebaseException {
+		return this.delete( null );
+	}
 
+	/**
+	 * DELETEs data from the provided-path relative to the base-url.
+	 * 
+	 * @param path -- if null/empty, refers to the base-url
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
+	 */
+	public FirebaseResponse delete( String path ) throws FirebaseException {
+		
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpDelete request = new HttpDelete( url );
+		HttpResponse httpResponse = this.makeRequest( request );
+		
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.DELETE, httpResponse );
+		
+		return response;
+	}
+	
+	
 	
 ///////////////////////////////////////////////////////////////////////////////
 //
 // PRIVATE API
 //
 ///////////////////////////////////////////////////////////////////////////////
-
-	private String deleteJsonData( String deleteUrl ) throws FirebaseException {
-
-		if( deleteUrl == null || deleteUrl.trim().isEmpty() ) {
-			String msg = "deleteUrl cannot be null/empty; was: '" + deleteUrl + "'";
-			LOGGER.warn( msg );
-			throw new FirebaseException( msg );
-		}
-		deleteUrl = deleteUrl.trim();
+	
+	
+	private StringEntity buildEntityFromDataMap( Map<String, Object> dataMap ) throws FirebaseException, JacksonUtilityException {
 		
-		StringBuilder result = new StringBuilder();
-		InputStream is = null;
-		try {
+		String jsonData = JacksonUtility.GET_JSON_STRING_FROM_MAP( dataMap );
 		
-			HttpClient client = new DefaultHttpClient();
-			HttpDelete request = new HttpDelete( deleteUrl );
-		    HttpResponse response = client.execute( request );
-		    HttpEntity responseEntity = response.getEntity();
-
-			Writer writer = new StringWriter();
-
-/*BJG*/ System.out.println( "\n\nSuccess? " + response.getStatusLine().getReasonPhrase() );
-/*BJG*/ System.out.println( "Code: " + response.getStatusLine().getStatusCode() + "\n\n" );
-
-			if( responseEntity != null ) {
-				is = responseEntity.getContent();
-				char[] buffer = new char[1024];
-				Reader reader = new BufferedReader( new InputStreamReader( is, "UTF-8" ) );
-				int n;
-				while( (n=reader.read(buffer)) != -1 ) {
-					writer.write( buffer, 0, n );
-				}
-			}
-			result.append( writer.toString() );
-		    
-		} catch( Throwable t ) {
-			
-			String msg = "unable to perform DELETE-request(" + deleteUrl + ")";
-			LOGGER.error( msg );
-			throw new FirebaseException( msg, t );
-			
-		} finally {
-			
-			// apache http-components states we should always try and close the input-stream
-			if( is != null ) {
-				try {
-					is.close();
-				} catch( IOException e ) {
-					LOGGER.warn( "error closing input-stream", e );
-				}
-			}
-			
-		}
-		
-		LOGGER.debug( "response-data of DELETE-request(" + deleteUrl + ") was: " + result.toString() );
-		
-		return result.toString();
+		return this.buildEntityFromJsonData( jsonData );
 	}
 	
-	private String postJsonData( String postUrl, String jsonData ) throws FirebaseException {
+	private StringEntity buildEntityFromJsonData( String jsonData ) throws FirebaseException {
 
-		if( postUrl == null || postUrl.trim().isEmpty() ) {
-			String msg = "postUrl cannot be null/empty; was: '" + postUrl + "'";
-			LOGGER.warn( msg );
-			throw new FirebaseException( msg );
-		}
-		postUrl = postUrl.trim();
-		
-		StringBuilder result = new StringBuilder();
-		InputStream is = null;
+		StringEntity result = null;
 		try {
 			
-			HttpClient client = new DefaultHttpClient();
-			HttpPost request = new HttpPost( postUrl );
-			StringEntity entity = new StringEntity( jsonData );
-			request.setEntity( entity );
-			HttpResponse response = client.execute( request );
-			HttpEntity responseEntity = response.getEntity();
-			
-			Writer writer = new StringWriter();
-
-/*BJG*/ System.out.println( "\n\nSuccess? " + response.getStatusLine().getReasonPhrase() );
-/*BJG*/ System.out.println( "Code: " + response.getStatusLine().getStatusCode() + "\n\n" );
-
-			if( responseEntity != null ) {
-				is = responseEntity.getContent();
-				char[] buffer = new char[1024];
-				Reader reader = new BufferedReader( new InputStreamReader( is, "UTF-8" ) );
-				int n;
-				while( (n=reader.read(buffer)) != -1 ) {
-					writer.write( buffer, 0, n );
-				}
-			}
-			result.append( writer.toString() );
+			result = new StringEntity( jsonData );
 			
 		} catch( Throwable t ) {
 			
-			String msg = "unable to perform POST-request(" + postUrl + ")";
+			String msg = "unable to create entity from data; data was: " + jsonData;
 			LOGGER.error( msg );
 			throw new FirebaseException( msg, t );
 			
-		} finally {
-			
-			// apache http-components states we should always try and close the input-stream
-			if( is != null ) {
-				try {
-					is.close();
-				} catch( IOException e ) {
-					LOGGER.warn( "error closing input-stream", e );
-				}
-			}
-			
 		}
 		
-		LOGGER.debug( "response-data of POST-request(" + postUrl + ") was: " + result.toString() );
-		
-		return result.toString();
+		return result;
 	}
 	
-	private String putJsonData( String putUrl, String jsonData ) throws FirebaseException {
+	private String buildFullUrlFromRelativePath( String path ) {
 		
-		if( putUrl == null || putUrl.trim().isEmpty() ) {
-			String msg = "putUrl cannot be null/empty; was: '" + putUrl + "'";
-			LOGGER.warn( msg );
-			throw new FirebaseException( msg );
+		// massage the path (whether it's null, empty, or not) into a full URL
+		if( path == null ) {
+			path = "";
 		}
-		putUrl = putUrl.trim();
-		
-		StringBuilder result = new StringBuilder();
-		InputStream is = null;
-		try {
-			
-			HttpClient client = new DefaultHttpClient();
-			HttpPut request = new HttpPut( putUrl );
-			StringEntity entity = new StringEntity( jsonData );
-			request.setEntity( entity );
-			HttpResponse response = client.execute( request );
-			HttpEntity responseEntity = response.getEntity();
-
-			Writer writer = new StringWriter();
-
-/*BJG*/ System.out.println( "\n\nSuccess? " + response.getStatusLine().getReasonPhrase() );
-/*BJG*/ System.out.println( "Code: " + response.getStatusLine().getStatusCode() + "\n\n" );
-			
-			if( responseEntity != null ) {
-				is = responseEntity.getContent();
-				char[] buffer = new char[1024];
-				Reader reader = new BufferedReader( new InputStreamReader( is, "UTF-8" ) );
-				int n;
-				while( (n=reader.read(buffer)) != -1 ) {
-					writer.write( buffer, 0, n );
-				}
-			}
-			result.append( writer.toString() );
-			
-			
-		} catch( Throwable t ) {
-			
-			String msg = "unable to perform PUT-request(" + putUrl + ")";
-			LOGGER.error( msg );
-			throw new FirebaseException( msg, t );
-			
-		} finally {
-			
-			// apache http-components states we should always try and close the input-stream
-			if( is != null ) {
-				try {
-					is.close();
-				} catch( IOException e ) {
-					LOGGER.warn( "error closing input-stream", e );
-				}
-			}
-			
+		path = path.trim();
+		if( !path.isEmpty() && !path.startsWith( "/" ) ) {
+			path = "/" + path;
 		}
+		String url = this.baseUrl + path + Firebase.FIREBASE_API_JSON_EXTENSION;
 		
-		LOGGER.debug( "response-data of PUT-request(" + putUrl + ") was: " + result.toString() );
+		LOGGER.info( "built full url to '" + url + "' using relative-path of '" + path + "'" );
 		
-		return result.toString();
+		return url;
 	}
 	
-	private String getJsonData( String getUrl ) throws FirebaseException {
-
-		if( getUrl == null || getUrl.trim().isEmpty() ) {
-			String msg = "getUrl cannot be null/empty; was: '" + getUrl + "'";
-			LOGGER.warn( msg );
+	private HttpResponse makeRequest( HttpRequestBase request ) throws FirebaseException {
+		
+		HttpResponse response = null;
+		
+		// sanity-check
+		if( request == null ) {
+			
+			String msg = "request cannot be null";
+			LOGGER.error( msg );
 			throw new FirebaseException( msg );
 		}
-		getUrl = getUrl.trim();
 		
-		StringBuilder result = new StringBuilder();
-		InputStream is = null;
 		try {
-
+			
 			HttpClient client = new DefaultHttpClient();
-			HttpGet request = new HttpGet( getUrl );			
-			HttpResponse response = client.execute( request );
-			HttpEntity entity = response.getEntity();
+			response = client.execute( request );
+			
+		} catch( Throwable t ) {
+		
+			String msg = "unable to receive response from request(" + request.getMethod() +  ") @ " + request.getURI();
+			LOGGER.error( msg );
+			throw new FirebaseException( msg, t );
+			
+		}
+			
+		return response;
+	}
+	
+	private FirebaseResponse processResponse( FirebaseRestMethod method, HttpResponse httpResponse ) throws FirebaseException {
+	
+		FirebaseResponse response = null;
 
-			Writer writer = new StringWriter();
-
-/*BJG*/ System.out.println( "\n\nSuccess? " + response.getStatusLine().getReasonPhrase() );
-/*BJG*/ System.out.println( "Code: " + response.getStatusLine().getStatusCode() + "\n\n" );
-
-			if( entity != null ) {
-				is = entity.getContent();
+		// sanity-checks
+		if( method == null ) {
+			
+			String msg = "method cannot be null";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg );
+		}
+		if( httpResponse == null ) {
+			
+			String msg = "httpResponse cannot be null";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg );
+		}
+		
+		// get the response-entity
+		HttpEntity entity = httpResponse.getEntity();
+		
+		// get the response-code
+		int code = httpResponse.getStatusLine().getStatusCode();
+		
+		// set the response-success
+		boolean success = false;
+		switch( method ) {
+			case DELETE:
+				if( httpResponse.getStatusLine().getStatusCode() == 204
+					&& "No Content".equalsIgnoreCase( httpResponse.getStatusLine().getReasonPhrase() ) )
+				{
+					success = true;
+				}
+				break;
+			case PUT:
+			case POST:
+			case GET:
+				if( httpResponse.getStatusLine().getStatusCode() == 200
+					&& "OK".equalsIgnoreCase( httpResponse.getStatusLine().getReasonPhrase() ) )
+				{
+					success = true;
+				}
+				break;
+			default:
+				break;
+				
+		}
+		
+		// get the response-body
+		Writer writer = new StringWriter();
+		if( entity != null ) {
+			
+			try {
+				
+				InputStream is = entity.getContent();
 				char[] buffer = new char[1024];
 				Reader reader = new BufferedReader( new InputStreamReader( is, "UTF-8" ) );
 				int n;
 				while( (n=reader.read(buffer)) != -1 ) {
 					writer.write( buffer, 0, n );
 				}
+				
+			} catch( Throwable t ) {
+				
+				String msg = "unable to read response-content; read up to this point: '" + writer.toString() + "'";
+				writer = new StringWriter(); // don't want to later give jackson partial JSON it might choke on
+				LOGGER.error( msg );
+				throw new FirebaseException( msg, t );
+				
 			}
-			result.append( writer.toString() );
-			
-		} catch( Throwable t ) {
-			
-			String msg = "unable to perform GET-request(" + getUrl + ")";
-			LOGGER.error( msg );
-			throw new FirebaseException( msg, t );
-			
-		} finally {
-			
-			// apache http-components states we should always try and close the input-stream
-			if( is != null ) {
-				try {
-					is.close();
-				} catch( IOException e ) {
-					LOGGER.warn( "error closing input-stream", e );
-				}
-			}
-			
 		}
 		
-		LOGGER.debug( "response-data of GET-request(" + getUrl + ") was: " + result.toString() );
+		// convert response-body to map
+		Map<String, Object> body = null;
+		try {
+			
+			body = JacksonUtility.GET_JSON_STRING_AS_MAP( writer.toString() );
+			
+		} catch( JacksonUtilityException jue ) {
+			
+			String msg = "unable to convert response-body into map; response-body was: '" + writer.toString() + "'";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg, jue );
+		}
 		
-		return result.toString();
+		// build the response
+		response = new FirebaseResponse( success, code, body, writer.toString() );
+		
+		return response;
 	}
-
+	
+	
 	
 ///////////////////////////////////////////////////////////////////////////////
 //
-// MAIN
+// INTERNAL CLASSES
 //
 ///////////////////////////////////////////////////////////////////////////////
+
 	
-	public static void main(String[] args) throws FirebaseException, JsonParseException, JsonMappingException, IOException {
-
+	public enum FirebaseRestMethod {
 		
-		// get the base-url (ie: 'http://gamma.firebase.com/username')
-		String firebase_baseUrl = null;
-		for( String s : args ) {
-
-			if( s == null || s.trim().isEmpty() ) continue;
-			if( s.trim().split( "=" )[0].equals( "baseUrl" ) ) {
-				firebase_baseUrl = s.trim().split( "=" )[1];
-			}
-		}
-		if( firebase_baseUrl == null || firebase_baseUrl.trim().isEmpty() ) {
-			throw new IllegalArgumentException( "Program-argument 'baseUrl' not found but required" );
-		}
-
-		// create the firebase
-		Firebase firebase = new Firebase( firebase_baseUrl );
-	
-		
-		// "GET" (the root)
-		Map<String, Object> map = firebase.get();
-		if( map == null ) { 
-			map = new LinkedHashMap<String, Object>();
-		}
-		Iterator<String> it = map.keySet().iterator();
-		System.out.println( "\n\nResult of GET:" );
-		while( it.hasNext() ) {
-			String key = it.next();
-			System.out.println( key + "->" + map.get(key) );
-		}
-		System.out.println("\n");
-		
-		// "GET" (the test-PUT)
-		map = firebase.get( "test-PUT" );
-		if( map == null ) { 
-			map = new LinkedHashMap<String, Object>();
-		}
-		it = map.keySet().iterator();
-		System.out.println( "\n\nResult of GET (for the test-PUT):" );
-		while( it.hasNext() ) {
-			String key = it.next();
-			System.out.println( key + "->" + map.get(key) );
-		}
-		System.out.println("\n");
-		
-		
-		// "PUT" (test-map into a sub-node off of the root)
-		Map<String, Object> dataMap = new LinkedHashMap<String, Object>();
-		dataMap.put( "Key_1", "This is the first value" );
-		dataMap.put( "Key_2", "This is value #2" );
-		Map<String, Object> dataMap2 = new LinkedHashMap<String, Object>();
-		dataMap2.put( "Sub-Key1", "This is the first sub-value" );
-		dataMap.put( "Key_3", dataMap2 );
-		String jsonData = GET_JSON_STRING_FROM_MAP( dataMap );
-		map = firebase.put( "test-PUT", jsonData );
-		it = map.keySet().iterator();
-		System.out.println( "\n\nResult of PUT (for the test-PUT):" );
-		while( it.hasNext() ) {
-			String key = it.next();
-			System.out.println( key + "->" + map.get(key) );
-		}
-		System.out.println("\n");
-		
-		
-		// "POST" (test-map into a sub-node off of the root)
-		map = firebase.post( "test-POST", jsonData );
-		it = map.keySet().iterator();
-		System.out.println( "\n\nResult of POST (for the test-POST):" );
-		while( it.hasNext() ) {
-			String key = it.next();
-			System.out.println( key + "->" + map.get(key) );
-		}
-		System.out.println("\n");
-		
-		
-		// "DELETE"
-		map = firebase.delete( "test-POST" );
-		it = map.keySet().iterator();
-		System.out.println( "\n\nResult of DELETE (for the test-POST):" );
-		while( it.hasNext() ) {
-			String key = it.next();
-			System.out.println( key + "->" + map.get(key) );
-		}
-		System.out.println( "\n" );
+		GET,
+		PUT,
+		POST,
+		DELETE;
 	}
 	
 }
