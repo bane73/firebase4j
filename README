@@ -70,10 +70,10 @@ EXAMPLE (for more example-code, refer to the Demo.java file)
 	System.out.println( response );
 	
 	// alternatively, you can get a few details about the response
-	response.getSuccess(); 		// true/false if method finished successfully
-	response.getCode(); 		// http-code of method-request
-	response.getBody();			// a map of the data returned
-	response.getRawBody();		// the data returned in it's raw-form (ie: JSON)
+	response.getSuccess(); 	// true/false if method finished successfully
+	response.getCode(); 	// http-code of method-request
+	response.getBody();		// a map of the data returned
+	response.getRawBody();	// the data returned in it's raw-form (ie: JSON)
 	
 	// another alternative, you can PUT/POST your own JSON if you want
 	response = firebase.put( "PUT2", "{ 'key': 'Some value' }" );
