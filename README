@@ -1,88 +1,64 @@
-Firebase4j
+OpenStates4j
 
 Note: THIS PROJECT IS STILL IN ALPHA.
 
 
 REQUIREMENTS
 
-	In order to use this project, you must first acquire a Firebase workspace-url.
-	You can obtain a workspace-url by visiting http://www.firebase.com/signup.html and
-	signing up for early-access to their private-beta.
-	
-	Alternatively, you can run through their tutorial and then use the auto-generated
-	workspace-url the tutorial provides you with.  This url, however, is transient so 
-	don't put any data in there you want to keep around.
-	
-	You should also review the Firebase documentation and tutorial, as this interface is 
-	only meant to provide a thin wrapper around their REST API.
-	
-	Their REST API documentation can be found at http://www.firebase.com/docs/rest-api.html
-	Their tutorial can be found at http://www.firebase.com/tutorial/
-	
-	
-CURRENT FUNCTIONALITY	
+	In order to use this project, you must first acquire a Sunlight Labs API Key.
+	You can obtain a key by visiting http://services.sunlightlabs.com
 
-	This project currently supports GET, PUT, POST, and DELETE to perform real-time 
-	notifications to clients from the back-end.  However, the reverse is not true; so, if
-	a client updates the firebase-data, the back-end will not automatically be aware of it.
+	You should also review the Open States API documentation, as this interface
+	is only meant to provide a thin wrapper around it and should (hopefully) 
+	closely mirror it.
 	
-	You could theoretically implement some sort of polling and delta-parsing on the back-end
-	in order to accomplish this, but this wrapper does not (yet?) take care of that for you.
-	
-	Of course, if your clients are also subscribing directly to the firebase-data, they would
-	naturally be made aware of any changes by another client since this is existing native
-	behavior of the Firebase API.
-	
-	
-"LOOK, MA, NO HANDS!" (but they aren't tied either!)
+	All of the Objects, methods, and parameters represented by the API are 
+	similarly represented by this wrapper.  Optional (and new) fields exposed 
+	by the API will be found in a map (`'optionalProperties'`) on each Object.
 
-	The goal of this project is to do all of the mundane-lifting for you, but efforts have been
-	made to do this in a flexible enough way that it doesn't limit you too much either.  
-	
-	So, this project allows you to interact with the firebase exclusively using Map<String, Object>.
-	
-	However, should you need or want to, you can opt to both provide your own JSON as well as work 
-	directly with the JSON returned by the firebase.
-	
-	Hopefully I have achieved the best balance between ease-of-use and flexibility; please feel free
-	to contact me with your input if you think I can do a better job of achieving that goal.
-	
-	
-EXAMPLE (for more example-code, refer to the Demo.java file)
+	The API documentation can be found at http://openstates.org/api/
 
-	// create the firebase
-	Firebase firebase = new Firebase( your_firebase_workspace_url );
+
+EXAMPLE
+
+	OpenStates.setApiKey( {YOUR_SUNLIGHT_LABS_API_KEY} );
 	
-	// PUT a map of some data into the firebase
-	Map<String, Object> dataMap = new LinkedHashMap<String, Object>();
-	dataMap.put( "PUT", "This was PUT into your workspace root" );
+	// find all Districts for the state of California
+	List<District> allCaliforniaDistricts = District.find( "ca" );
 	
-	// GET the map back out of the firebase
-	response = firebase.get( "PUT" );
-	System.out.println( response );
+	// find all NY's upper-house Bills that have been updated since 01Jan2012
+	Map<String, String> queryParams = new HashMap<String, String>();
+	queryParams.put( "state", "ny" );
+	queryParams.put( "updated_since", "2012-01-01" );
+	queryParams.put( "chamber", "upper" );
+	List<Bill> allRecentBillsInNyUpperHouse = Bill.find( queryParams );
+
+	// find a specific Bill
+	Bill aBill = allRecentBillsInNyUpperHouse.get(0);
+	Bill targetBill = Bill.get( aBill.state, aBill.session, aBill.id );
 	
-	// alternatively, you can get a few details about the response
-	response.getSuccess(); 		// true/false if method finished successfully
-	response.getCode(); 		// http-code of method-request
-	response.getBody();			// a map of the data returned
-	response.getRawBody();		// the data returned in it's raw-form (ie: JSON)
+	// finding Legislator's that represent a specific geo-area
+	List<Legislator> geoLegislators = Legislator.find( "-78.76648", "35.81336" );
 	
-	// another alternative, you can PUT/POST your data as your own JSON if you want
-	response = firebase.put( "PUT2", "{ 'key': 'Some value' }" );
-	
-	
+	// accessing a Legislator's properties
+	Legislator legislator = geoLegislators.get(0);
+	String id = legislator.id;
+	String fullName = legislator.fullName;
+	String email = legislator.email;
+	boolean isActive = legislator.isActive;
+
+
 HELP
 
-	Please submit usage-questions to: brandon@thegreshams.net
-	
+	Please submit usage-questions to: 
+	https://groups.google.com/forum/?fromgroups#!forum/fifty-state-project
+
 
 BUGS
 
-	Please submit all bugs to: https://github.com/bane73/firebase4j/issues
-	
+	Please submit all bugs to: https://github.com/bane73/openstates4j/issues
+
 	
 COPYRIGHT
 
 	Copyright (c) 2012 by Brandon Gresham.  See LICENSE.txt for details.
-	
-	
