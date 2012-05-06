@@ -63,7 +63,8 @@ EXAMPLE (for more example-code, refer to the Demo.java file)
 	
 	// PUT a map of some data into the firebase
 	Map<String, Object> dataMap = new LinkedHashMap<String, Object>();
-	dataMap.put( "PUT", "This was PUT into your workspace root" );
+	dataMap.put( "KEY", "This VALUE was PUT into your workspace root" );
+	response = firebase.put( "PUT", dataMap );
 	
 	// GET the map back out of the firebase
 	response = firebase.get( "PUT" );
