@@ -6,8 +6,9 @@ Note: THIS PROJECT IS STILL IN ALPHA.
 REQUIREMENTS
 
 	In order to use this project, you must first acquire a Firebase workspace-url.
-	You can obtain a workspace-url by visiting http://www.firebase.com/signup.html and
-	signing up for early-access to their private-beta.
+	You can obtain a workspace-url by visiting 
+		http://www.firebase.com/signup.html 
+	and signing up for early-access to their private-beta.
 	
 	Alternatively, you can run through their tutorial and then use the auto-generated
 	workspace-url the tutorial provides you with.  This url, however, is transient so 
@@ -16,8 +17,10 @@ REQUIREMENTS
 	You should also review the Firebase documentation and tutorial, as this interface is 
 	only meant to provide a thin wrapper around their REST API.
 	
-	Their REST API documentation can be found at http://www.firebase.com/docs/rest-api.html
-	Their tutorial can be found at http://www.firebase.com/tutorial/
+	Their REST API documentation can be found at:
+		http://www.firebase.com/docs/rest-api.html
+	Their tutorial can be found at:
+		http://www.firebase.com/tutorial/
 	
 	
 CURRENT FUNCTIONALITY	
