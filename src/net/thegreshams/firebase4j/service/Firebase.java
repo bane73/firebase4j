@@ -15,7 +15,9 @@ import java.util.Map;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -222,9 +224,36 @@ public class Firebase {
 	 * 			id.  
 	 * 
 	 * @param path
+	 * @throws FirebaseException 
 	 */
-	public void post( String path, String jsonData ) {
+	public Map<String, Object> post( String path, String jsonData ) throws FirebaseException {
+
+		if( path != null && !path.startsWith( "/" ) ) {
+			path = "/" + path;
+		}
+		if( path == null ) {
+			path = "";
+		}
 		
+		String jsonResponse = this.postJsonData( this.baseUrl + path + FIREBASE_API_JSON_EXTENSION, jsonData );
+		Map<String, Object> result = GET_JSON_STRING_AS_MAP( jsonResponse );
+		
+		return result;
+	}
+	
+	public Map<String, Object> delete( String path ) throws FirebaseException {
+
+		if( path != null && !path.startsWith( "/" ) ) {
+			path = "/" + path;
+		}
+		if( path == null ) {
+			path = "";
+		}
+		
+		String jsonResponse = this.deleteJsonData( this.baseUrl + path + FIREBASE_API_JSON_EXTENSION );
+		Map<String, Object> result = GET_JSON_STRING_AS_MAP( jsonResponse );
+		
+		return result;
 	}
 	
 
@@ -235,6 +264,123 @@ public class Firebase {
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+	private String deleteJsonData( String deleteUrl ) throws FirebaseException {
+
+		if( deleteUrl == null || deleteUrl.trim().isEmpty() ) {
+			String msg = "deleteUrl cannot be null/empty; was: '" + deleteUrl + "'";
+			LOGGER.warn( msg );
+			throw new FirebaseException( msg );
+		}
+		deleteUrl = deleteUrl.trim();
+		
+		StringBuilder result = new StringBuilder();
+		InputStream is = null;
+		try {
+		
+			HttpClient client = new DefaultHttpClient();
+			HttpDelete request = new HttpDelete( deleteUrl );
+		    HttpResponse response = client.execute( request );
+		    HttpEntity responseEntity = response.getEntity();
+
+			Writer writer = new StringWriter();
+
+/*BJG*/ System.out.println( "\n\nSuccess? " + response.getStatusLine().getReasonPhrase() );
+/*BJG*/ System.out.println( "Code: " + response.getStatusLine().getStatusCode() + "\n\n" );
+
+			if( responseEntity != null ) {
+				is = responseEntity.getContent();
+				char[] buffer = new char[1024];
+				Reader reader = new BufferedReader( new InputStreamReader( is, "UTF-8" ) );
+				int n;
+				while( (n=reader.read(buffer)) != -1 ) {
+					writer.write( buffer, 0, n );
+				}
+			}
+			result.append( writer.toString() );
+		    
+		} catch( Throwable t ) {
+			
+			String msg = "unable to perform DELETE-request(" + deleteUrl + ")";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg, t );
+			
+		} finally {
+			
+			// apache http-components states we should always try and close the input-stream
+			if( is != null ) {
+				try {
+					is.close();
+				} catch( IOException e ) {
+					LOGGER.warn( "error closing input-stream", e );
+				}
+			}
+			
+		}
+		
+		LOGGER.debug( "response-data of DELETE-request(" + deleteUrl + ") was: " + result.toString() );
+		
+		return result.toString();
+	}
+	
+	private String postJsonData( String postUrl, String jsonData ) throws FirebaseException {
+
+		if( postUrl == null || postUrl.trim().isEmpty() ) {
+			String msg = "postUrl cannot be null/empty; was: '" + postUrl + "'";
+			LOGGER.warn( msg );
+			throw new FirebaseException( msg );
+		}
+		postUrl = postUrl.trim();
+		
+		StringBuilder result = new StringBuilder();
+		InputStream is = null;
+		try {
+			
+			HttpClient client = new DefaultHttpClient();
+			HttpPost request = new HttpPost( postUrl );
+			StringEntity entity = new StringEntity( jsonData );
+			request.setEntity( entity );
+			HttpResponse response = client.execute( request );
+			HttpEntity responseEntity = response.getEntity();
+			
+			Writer writer = new StringWriter();
+
+/*BJG*/ System.out.println( "\n\nSuccess? " + response.getStatusLine().getReasonPhrase() );
+/*BJG*/ System.out.println( "Code: " + response.getStatusLine().getStatusCode() + "\n\n" );
+
+			if( responseEntity != null ) {
+				is = responseEntity.getContent();
+				char[] buffer = new char[1024];
+				Reader reader = new BufferedReader( new InputStreamReader( is, "UTF-8" ) );
+				int n;
+				while( (n=reader.read(buffer)) != -1 ) {
+					writer.write( buffer, 0, n );
+				}
+			}
+			result.append( writer.toString() );
+			
+		} catch( Throwable t ) {
+			
+			String msg = "unable to perform POST-request(" + postUrl + ")";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg, t );
+			
+		} finally {
+			
+			// apache http-components states we should always try and close the input-stream
+			if( is != null ) {
+				try {
+					is.close();
+				} catch( IOException e ) {
+					LOGGER.warn( "error closing input-stream", e );
+				}
+			}
+			
+		}
+		
+		LOGGER.debug( "response-data of POST-request(" + postUrl + ") was: " + result.toString() );
+		
+		return result.toString();
+	}
 	
 	private String putJsonData( String putUrl, String jsonData ) throws FirebaseException {
 		
@@ -275,6 +421,9 @@ public class Firebase {
 			
 		} catch( Throwable t ) {
 			
+			String msg = "unable to perform PUT-request(" + putUrl + ")";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg, t );
 			
 		} finally {
 			
@@ -381,6 +530,9 @@ public class Firebase {
 		
 		// "GET" (the root)
 		Map<String, Object> map = firebase.get();
+		if( map == null ) { 
+			map = new LinkedHashMap<String, Object>();
+		}
 		Iterator<String> it = map.keySet().iterator();
 		System.out.println( "\n\nResult of GET:" );
 		while( it.hasNext() ) {
@@ -389,10 +541,13 @@ public class Firebase {
 		}
 		System.out.println("\n");
 		
-		// "GET" (the food-coop)
-		map = firebase.get( "utah_food_coop" );
+		// "GET" (the test-PUT)
+		map = firebase.get( "test-PUT" );
+		if( map == null ) { 
+			map = new LinkedHashMap<String, Object>();
+		}
 		it = map.keySet().iterator();
-		System.out.println( "\n\nResult of GET (for the food-coop):" );
+		System.out.println( "\n\nResult of GET (for the test-PUT):" );
 		while( it.hasNext() ) {
 			String key = it.next();
 			System.out.println( key + "->" + map.get(key) );
@@ -417,6 +572,32 @@ public class Firebase {
 		}
 		System.out.println("\n");
 		
+		
+		// "POST" (test-map into a sub-node off of the root)
+		map = firebase.post( "test-POST", jsonData );
+		it = map.keySet().iterator();
+		System.out.println( "\n\nResult of POST (for the test-POST):" );
+		while( it.hasNext() ) {
+			String key = it.next();
+			System.out.println( key + "->" + map.get(key) );
+		}
+		System.out.println("\n");
+		
+		
+		// "DELETE"
+		map = firebase.delete( "test-POST" );
+		it = map.keySet().iterator();
+		System.out.println( "\n\nResult of DELETE (for the test-POST):" );
+		while( it.hasNext() ) {
+			String key = it.next();
+			System.out.println( key + "->" + map.get(key) );
+		}
+		System.out.println( "\n" );
 	}
 	
 }
+
+
+
+
+
