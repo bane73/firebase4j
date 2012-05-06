@@ -67,7 +67,7 @@ EXAMPLE (for more example-code, refer to the Demo.java file)
 	response = firebase.put( dataMap );
 	
 	// GET the map back out of the firebase
-	response = firebase.get( "PUT" );
+	response = firebase.get();
 	System.out.println( response );
 	
 	// alternatively, you can get a few details about the response
