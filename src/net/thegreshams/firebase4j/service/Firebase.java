@@ -5,7 +5,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import net.thegreshams.firebase4j.error.FirebaseException;
@@ -15,14 +20,17 @@ import net.thegreshams.firebase4j.util.JacksonUtility;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPatch;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.log4j.Logger;
 
 
@@ -43,6 +51,8 @@ public class Firebase {
 	
 	
 	private final String baseUrl;
+	private String secureToken = null;
+	private List<NameValuePair> query;
 	
 	
 	public Firebase( String baseUrl ) throws FirebaseException {
@@ -53,6 +63,19 @@ public class Firebase {
 			throw new FirebaseException( msg );
 		}
 		this.baseUrl = baseUrl.trim();
+		query = new ArrayList<NameValuePair>();
+		LOGGER.info( "intialized with base-url: " + this.baseUrl );
+	}
+	
+	public Firebase(String baseUrl, String secureToken) throws FirebaseException {
+		if( baseUrl == null || baseUrl.trim().isEmpty() ) {
+			String msg = "baseUrl cannot be null or empty; was: '" + baseUrl + "'";
+			LOGGER.error( msg );
+			throw new FirebaseException( msg );
+		}
+		this.secureToken = secureToken;
+		this.baseUrl = baseUrl.trim();
+		query = new ArrayList<NameValuePair>();
 		LOGGER.info( "intialized with base-url: " + this.baseUrl );
 	}
 
@@ -70,9 +93,10 @@ public class Firebase {
 	 * GETs data from the base-url.
 	 * 
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException} 
 	 */
-	public FirebaseResponse get() throws FirebaseException {
+	public FirebaseResponse get() throws FirebaseException, UnsupportedEncodingException {
 		return this.get( null );
 	}
 	
@@ -81,9 +105,10 @@ public class Firebase {
 	 * 
 	 * @param path -- if null/empty, refers to the base-url
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException} 
 	 */
-	public FirebaseResponse get( String path ) throws FirebaseException {
+	public FirebaseResponse get( String path ) throws FirebaseException, UnsupportedEncodingException {
 		
 		// make the request
 		String url = this.buildFullUrlFromRelativePath( path );
@@ -97,16 +122,90 @@ public class Firebase {
 	}
 	
 	/**
+	 * PATCHs data to the base-url
+	 * 
+	 * @param data -- can be null/empty
+	 * @return
+	 * @throws {@link FirebaseException}
+	 * @throws {@link JacksonUtilityException}
+	 * @throws UnsupportedEncodingException
+	 */
+	
+	public FirebaseResponse patch(Map<String, Object> data) throws FirebaseException, JacksonUtilityException, UnsupportedEncodingException {
+		return this.patch(null, data);
+	}
+	
+	/**
+	 * PATCHs data on the provided-path relative to the base-url.
+	 * 
+	 * @param path -- if null/empty, refers to the base-url
+	 * @param data -- can be null/empty
+	 * @return {@link FirebaseResponse}
+	 * @throws {@link FirebaseException}
+	 * @throws {@link JacksonUtilityException}
+	 * @throws UnsupportedEncodingException
+	 */
+	
+	public FirebaseResponse patch(String path, Map<String, Object> data) throws FirebaseException, JacksonUtilityException, UnsupportedEncodingException {
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		//HttpPut request = new HttpPut( url );
+		HttpPatch request = new HttpPatch(url);
+		request.setEntity( this.buildEntityFromDataMap( data ) );
+		HttpResponse httpResponse = this.makeRequest( request );
+				
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.PATCH, httpResponse );
+				
+		return response;
+	}
+	
+	/**
+	 * 
+	 * @param jsonData
+	 * @return
+	 * @throws UnsupportedEncodingException
+	 * @throws FirebaseException
+	 */
+	
+	public FirebaseResponse patch(String jsonData) throws UnsupportedEncodingException, FirebaseException {
+		return this.patch(null, jsonData);
+	}
+	
+	/**
+	 * 
+	 * @param path
+	 * @param jsonData
+	 * @return
+	 * @throws UnsupportedEncodingException
+	 * @throws FirebaseException
+	 */
+	
+	public FirebaseResponse patch(String path, String jsonData) throws UnsupportedEncodingException, FirebaseException {
+		// make the request
+		String url = this.buildFullUrlFromRelativePath( path );
+		HttpPatch request = new HttpPatch( url );
+		request.setEntity( this.buildEntityFromJsonData( jsonData ) );
+		HttpResponse httpResponse = this.makeRequest( request );
+				
+		// process the response
+		FirebaseResponse response = this.processResponse( FirebaseRestMethod.PATCH, httpResponse );
+				
+		return response;		
+	}
+	
+	/**
 	 * PUTs data to the base-url (ie: creates or overwrites).
 	 * If there is already data at the base-url, this data overwrites it.
 	 * If data is null/empty, any data existing at the base-url is deleted.
 	 * 
 	 * @param data -- can be null/empty
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link JacksonUtilityException}
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse put( Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+	public FirebaseResponse put( Map<String, Object> data ) throws JacksonUtilityException, FirebaseException, UnsupportedEncodingException {
 		return this.put( null, data );
 	}
 	
@@ -118,10 +217,11 @@ public class Firebase {
 	 * @param path -- if null/empty, refers to base-url
 	 * @param data -- can be null/empty
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link JacksonUtilityException}
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse put( String path, Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+	public FirebaseResponse put( String path, Map<String, Object> data ) throws JacksonUtilityException, FirebaseException, UnsupportedEncodingException {
 		
 		// make the request
 		String url = this.buildFullUrlFromRelativePath( path );
@@ -142,9 +242,10 @@ public class Firebase {
 	 * 
 	 * @param jsonData -- can be null/empty
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse put( String jsonData ) throws FirebaseException {
+	public FirebaseResponse put( String jsonData ) throws FirebaseException, UnsupportedEncodingException {
 		return this.put( null, jsonData );
 	}
 
@@ -156,9 +257,10 @@ public class Firebase {
 	 * @param path -- if null/empty, refers to base-url
 	 * @param jsonData -- can be null/empty
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse put( String path, String jsonData ) throws FirebaseException {
+	public FirebaseResponse put( String path, String jsonData ) throws FirebaseException, UnsupportedEncodingException {
 
 		// make the request
 		String url = this.buildFullUrlFromRelativePath( path );
@@ -182,10 +284,11 @@ public class Firebase {
 	 * 
 	 * @param data -- can be null/empty but will result in no data being POSTed
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link JacksonUtilityException}
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse post( Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+	public FirebaseResponse post( Map<String, Object> data ) throws JacksonUtilityException, FirebaseException, UnsupportedEncodingException {
 		return this.post( null, data );
 	}
 	
@@ -200,10 +303,11 @@ public class Firebase {
 	 * @param path -- if null/empty, refers to base-url
 	 * @param data -- can be null/empty but will result in no data being POSTed
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link JacksonUtilityException}
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse post( String path, Map<String, Object> data ) throws JacksonUtilityException, FirebaseException {
+	public FirebaseResponse post( String path, Map<String, Object> data ) throws JacksonUtilityException, FirebaseException, UnsupportedEncodingException {
 		
 		// make the request
 		String url = this.buildFullUrlFromRelativePath( path );
@@ -227,9 +331,10 @@ public class Firebase {
 	 * 
 	 * @param jsonData -- can be null/empty but will result in no data being POSTed
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse post( String jsonData ) throws FirebaseException {
+	public FirebaseResponse post( String jsonData ) throws FirebaseException, UnsupportedEncodingException {
 		return this.post( null, jsonData );
 	}
 	
@@ -244,9 +349,10 @@ public class Firebase {
 	 * @param path -- if null/empty, refers to base-url
 	 * @param jsonData -- can be null/empty but will result in no data being POSTed
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse post( String path, String jsonData ) throws FirebaseException {
+	public FirebaseResponse post( String path, String jsonData ) throws FirebaseException, UnsupportedEncodingException {
 		
 		// make the request
 		String url = this.buildFullUrlFromRelativePath( path );
@@ -261,12 +367,26 @@ public class Firebase {
 	}
 	
 	/**
+	 * Append a query to the request.
+	 * 
+	 * @param query -- Query string based on Firebase REST API
+	 * @param parameter -- Query parameter
+	 * @return Firebase -- return this Firebase object
+	 */
+	
+	public Firebase addQuery(String query, String parameter) {
+		this.query.add(new BasicNameValuePair(query, parameter));
+		return this;
+	}
+	
+	/**
 	 * DELETEs data from the base-url.
 	 * 
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse delete() throws FirebaseException {
+	public FirebaseResponse delete() throws FirebaseException, UnsupportedEncodingException {
 		return this.delete( null );
 	}
 
@@ -275,9 +395,10 @@ public class Firebase {
 	 * 
 	 * @param path -- if null/empty, refers to the base-url
 	 * @return {@link FirebaseResponse}
+	 * @throws UnsupportedEncodingException 
 	 * @throws {@link FirebaseException}
 	 */
-	public FirebaseResponse delete( String path ) throws FirebaseException {
+	public FirebaseResponse delete( String path ) throws FirebaseException, UnsupportedEncodingException {
 		
 		// make the request
 		String url = this.buildFullUrlFromRelativePath( path );
@@ -324,7 +445,7 @@ public class Firebase {
 		return result;
 	}
 	
-	private String buildFullUrlFromRelativePath( String path ) {
+	private String buildFullUrlFromRelativePath( String path ) throws UnsupportedEncodingException {
 		
 		// massage the path (whether it's null, empty, or not) into a full URL
 		if( path == null ) {
@@ -336,10 +457,35 @@ public class Firebase {
 		}
 		String url = this.baseUrl + path + Firebase.FIREBASE_API_JSON_EXTENSION;
 		
+		if(query != null) {
+			url += "?";
+			Iterator<NameValuePair> it = query.iterator();
+			NameValuePair e;
+			while(it.hasNext()) {
+				e = it.next();
+				url += e.getName() + "=" + URLEncoder.encode(e.getValue(), "UTF-8") + "&";
+			}
+		}
+		
+		if(secureToken != null) {
+			if(query != null) {
+				url += "auth=" + secureToken;
+			} else {
+				url += "?auth=" + secureToken;
+			}
+		}
+		
+		if(url.lastIndexOf("&") == url.length()) {
+			StringBuilder str = new StringBuilder(url);
+			str.deleteCharAt(str.length());
+			url = str.toString();
+		}
+		
 		LOGGER.info( "built full url to '" + url + "' using relative-path of '" + path + "'" );
 		
 		return url;
 	}
+	
 	
 	private HttpResponse makeRequest( HttpRequestBase request ) throws FirebaseException {
 		
@@ -403,6 +549,7 @@ public class Firebase {
 					success = true;
 				}
 				break;
+			case PATCH:
 			case PUT:
 			case POST:
 			case GET:
@@ -457,6 +604,9 @@ public class Firebase {
 		// build the response
 		response = new FirebaseResponse( success, code, body, writer.toString() );
 		
+		//clear the query
+		query = null;
+		
 		return response;
 	}
 	
@@ -472,6 +622,7 @@ public class Firebase {
 	public enum FirebaseRestMethod {
 		
 		GET,
+		PATCH,
 		PUT,
 		POST,
 		DELETE;
