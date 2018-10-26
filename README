@@ -2,6 +2,9 @@ Firebase4j
 
 Note: THIS PROJECT IS STILL IN ALPHA.
 
+UPDATE: if you want to bring this into a Maven-project, Jitpack can dynamically make it 
+available to you (I haven't tried this in several years, hopefully it still works):
+https://jitpack.io/p/bane73/firebase4j 
 
 REQUIREMENTS
 
