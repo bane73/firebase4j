@@ -432,7 +432,7 @@ public class Firebase {
 		StringEntity result = null;
 		try {
 			
-			result = new StringEntity( jsonData );
+			result = new StringEntity( jsonData , "UTF-8" );
 			
 		} catch( Throwable t ) {
 			
