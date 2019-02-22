@@ -53,8 +53,8 @@ public class Firebase {
 	private final String baseUrl;
 	private String secureToken = null;
 	private List<NameValuePair> query;
-	
-	
+	private Boolean useJsonExt = true;
+
 	public Firebase( String baseUrl ) throws FirebaseException {
 
 		if( baseUrl == null || baseUrl.trim().isEmpty() ) {
@@ -66,7 +66,18 @@ public class Firebase {
 		query = new ArrayList<NameValuePair>();
 		LOGGER.info( "intialized with base-url: " + this.baseUrl );
 	}
-	
+
+	/**
+	 * Overloaded constructor for cases where you need to prevent adding the json extension to the url.
+	 * @param baseUrl
+	 * @param useJsonExtension include the json extension to the URL?
+	 * @throws FirebaseException
+	 */
+	public Firebase( String baseUrl, Boolean useJsonExtension ) throws FirebaseException {
+		this(baseUrl);
+		useJsonExt = useJsonExtension;
+	}
+
 	public Firebase(String baseUrl, String secureToken) throws FirebaseException {
 		if( baseUrl == null || baseUrl.trim().isEmpty() ) {
 			String msg = "baseUrl cannot be null or empty; was: '" + baseUrl + "'";
@@ -455,7 +466,10 @@ public class Firebase {
 		if( !path.isEmpty() && !path.startsWith( "/" ) ) {
 			path = "/" + path;
 		}
-		String url = this.baseUrl + path + Firebase.FIREBASE_API_JSON_EXTENSION;
+
+		String url = this.baseUrl + path;
+
+		if(useJsonExt) url += Firebase.FIREBASE_API_JSON_EXTENSION;
 		
 		if(query != null) {
 			url += "?";
