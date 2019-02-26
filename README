@@ -63,7 +63,10 @@ EXAMPLE (for more example-code, refer to the Demo.java file)
 
 	// create the firebase
 	Firebase firebase = new Firebase( your_firebase_workspace_url );
-	
+
+	// exclude .json extension if it's not needed (ie, working with Firebase Authentication REST API)
+	Firebase firebase = new Firebase( your_firebase_workspace_url, false );
+
 	// PUT a map of some data into the firebase
 	Map<String, Object> dataMap = new LinkedHashMap<String, Object>();
 	dataMap.put( "PUT", "This was PUT into your workspace root" );
@@ -81,8 +84,8 @@ EXAMPLE (for more example-code, refer to the Demo.java file)
 	
 	// another alternative, you can PUT/POST your own JSON if you want
 	response = firebase.put( "PUT2", "{ 'key': 'Some value' }" );
-	
-	
+
+
 HELP
 
 	Please submit usage-questions to: brandon@thegreshams.net
