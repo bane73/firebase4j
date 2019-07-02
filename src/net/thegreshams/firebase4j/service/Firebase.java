@@ -483,9 +483,9 @@ public class Firebase {
 		
 		if(secureToken != null) {
 			if(query != null) {
-				url += "auth=" + secureToken;
+				url += "access_token=" + secureToken;
 			} else {
-				url += "?auth=" + secureToken;
+				url += "?access_token=" + secureToken;
 			}
 		}
 		
