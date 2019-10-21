@@ -619,7 +619,7 @@ public class Firebase {
 		response = new FirebaseResponse( success, code, body, writer.toString() );
 		
 		//clear the query
-		query = null;
+		query.clear(); // query is only initialized in the constructor. 
 		
 		return response;
 	}
