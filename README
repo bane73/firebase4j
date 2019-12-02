@@ -1,5 +1,16 @@
 Firebase4j
 
+++++++++++
+UPDATE DECEMBER 2019 -- CAVEAT EMPTOR!
+As much as I love seeing people's interest in my project, it is very dated and not well-supported (for lack of time and 
+interest); I approve other people's pull-requests to it but otherwise am not really maintaining it much. It was started as
+a POC and then one day I woke up and people were just using it (totally fine by me, but buyer-beware and all that). If this
+project actually fills a gap that is not provided by the official tooling, then I am totally open to people submitting 
+pull-requests for new features and keeping the project going; but when I created this project I wrapped the Firebase REST 
+API because they had no official Java support -- however, these days, that is no longer true 
+([they do!](https://firebase.google.com/docs/admin/setup)).
+++++++++++
+
 Note: THIS PROJECT IS STILL IN ALPHA.
 
 UPDATE: if you want to bring this into a Maven-project, Jitpack can dynamically make it 
@@ -84,11 +95,6 @@ EXAMPLE (for more example-code, refer to the Demo.java file)
 	
 	// another alternative, you can PUT/POST your own JSON if you want
 	response = firebase.put( "PUT2", "{ 'key': 'Some value' }" );
-
-
-HELP
-
-	Please submit usage-questions to: brandon@thegreshams.net
 	
 
 BUGS
